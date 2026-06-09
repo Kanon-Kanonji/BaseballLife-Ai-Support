@@ -1,5 +1,6 @@
 import pandas as pd
 from typing import Dict
+from bbl_rules import BBLRules, Ability
 
 class BBLDataLoader:
     def __init__(self, csv_path: str) -> None:
@@ -57,25 +58,81 @@ class BBLDataLoader:
         return 0.0
 
 # --- テスト実行 ---
+class BBLPlayer:
+    def __init__(self, name: str, growth_type: str, appeal: str) -> None:
+        self.name: str = name
+        self.growth_type: str = growth_type
+        self.appeal_point: str = appeal
+        self.age: int = 18
+        self.max_age: int = 37
+        
+        # 経験値タンク
+        self.abilities_exp: Dict[str, float] = {}
+        self.reset()
+        
+    def reset(self) -> None:
+        self.age = 18
+        # ルールモジュールから、AP補正込みの初期値をもらう
+        self.abilities_exp = BBLRules.get_initial_exps(self.appeal_point)
+
+    def show_status(self) -> None:
+        print(f"--- 【{self.name}】 {self.age}歳 ({self.growth_type} / AP:{self.appeal_point}) ---")
+        for abi, exp in self.abilities_exp.items():
+            # 経験値から、実数値とランク(文字)に変換して表示！
+            val, rank = BBLRules.exp_to_status(abi, exp)
+            print(f"  {abi}: {rank} ({val})  [現在の経験値: {exp:.1f}]")
+
+
+class BBLSimulator:
+    def __init__(self, csv_path: str) -> None:
+        self.data_loader = BBLDataLoader(csv_path)
+        self.player = BBLPlayer("テスト選手", "普通", Ability.POWER)
+        self.turns_left_this_year: int = 30
+        
+    def reset(self) -> None:
+        self.player.reset()
+        self.turns_left_this_year = 30
+        
+    def step(self, menu: str) -> bool:
+        if self.player.age >= self.player.max_age:
+            return True
+            
+        phase = self.data_loader.get_phase(self.player.growth_type, self.player.age)
+        base_gain = self.data_loader.get_gain(phase, menu)
+        
+        # ルールモジュールを使って、最終的な全能力の増減値を計算してもらう
+        gains, _ = BBLRules.calculate_gains(base_gain, menu, self.player.appeal_point)
+        
+        # プレイヤーの経験値タンクに反映
+        for abi, gain_val in gains.items():
+            self.player.abilities_exp[abi] += gain_val
+                
+        self.turns_left_this_year -= 1
+        
+        if self.turns_left_this_year <= 0:
+            print(f"\n【システム】: {self.player.age}歳のシーズンが終了しました。(30ターン消化)")
+            self.player.age += 1
+            self.turns_left_this_year = 30
+            
+        if self.player.age >= self.player.max_age:
+            print("\n【システム】: 選手が引退年齢に達しました。")
+            return True
+        return False
+
 if __name__ == "__main__":
-    # CSVのパス
-    csv_file = "resources/bbl_expect.csv"
+    expect_csv = "resources/bbl_expect.csv"
+    table_csv = "resources/経験値対照表_野手.csv"
     
     try:
-        loader = BBLDataLoader(csv_file)
+        BBLRules.load_exp_table(table_csv)
+        sim = BBLSimulator(expect_csv)
+        sim.reset()
         
-        test_growth = "早熟"
-        test_age = 18
-        test_menu = "パワーAP大"
-        
-        # 18歳の早熟が何期か調べる
-        current_phase = loader.get_phase(test_growth, test_age)
-        # その期のパワーAP大の数値を引っ張る
-        gain_expect = loader.get_gain(current_phase, test_menu)
-        
-        print(f"\n【検算結果】")
-        print(f"  {test_age}歳・{test_growth} の現在のフェーズ ⇒ {current_phase}")
-        print(f"  その状態で 『{test_menu.replace('\n', ' ')}』 を叩いた時の上昇期待値 ⇒ {gain_expect}")
-        
-    except FileNotFoundError:
-        print(f"【エラー】: '{csv_file}' が見つかりません。ファイルパスを確認してください。")
+        print("\n=== 18歳のシーズン開幕 ===")
+        for i in range(30):
+            sim.step("パワーAP大")
+            
+        sim.player.show_status()
+            
+    except FileNotFoundError as e:
+        print(f"【エラー】: ファイルが見つかりません。パスを確認してください。\n詳細: {e}")
