@@ -1,0 +1,1114 @@
+= モジュール設計書 (BBL AI支援システム 再現シミュレータ)
+:revnumber: 1.0
+:toc: left
+:toclevels: 3
+:toc-title: 目次
+:imagesdir: ./images
+:figure-caption: 図
+:table-caption: 表
+:xrefstyle: short
+
+== 改版履歴
+[cols="1,2,5,2", options="header"]
+|===
+|版数 |日付 |改訂内容 |改訂者
+|1.0 |2026-06-20 |初版作成 |観音寺かのん
+|===
+
+:sectnums:
+
+== はじめに
+本システムは、野球選手育成ブラウザゲーム『Baseball Life（以下BBL）』において、プレイヤーの現在能力および環境の状況と、設定された目標能力に基づき、最適な行動を推奨する意思決定支援システムである。
+
+本システムの開発にあたっては、強化学習フレームワークである「Gymnasium」を採用し、DQN（Deep Q-Network）等の強化学習アルゴリズムを用いて最適化を行う。
+強化学習のモデル訓練を高速かつ効率的に行うため、BBLのゲームロジックおよび環境（ステータス遷移や確率要素など）をPython上で再現するカスタムシミュレーターを構築する。
+
+本設計書は、このBBL再現シミュレータープログラムにおける各モジュールの仕様について定義したものである。
+
+
+== モジュール一覧
+本シミュレータのモジュール一覧を以下の<<fig-modules>>に示す。
+
+[[fig-modules]]
+.モジュール一覧
+image::modulelist.png[構成図]
+
+== モジュール詳細
+本モジュールの詳細な仕様および設計について示す。
+
+=== bbl_playerモジュール群
+本モジュールでは、BBLにおける選手データの管理を行う。
+選手能力のみならず所持アイテムや恋愛の状況、各行動の実施可否などのマスクデータも本モジュールで管理する。
+
+==== player.py
+player.pyはbbl_playerモジュール群に在籍する唯一のモジュールである。
+本モジュールで選手状態および次に取り得る行動の状態をすべて管理する。メソッドは持たず、計算処理を行わない。
+変数は全て``bbl_action``または``bbl_rules``の何れかから更新処理を行う。
+
+<<tbl-player-py>>は``player.py``の変数一覧である。
+
+[[tbl-player-py]]
+.player.pyの変数一覧
+[cols="2,2,2,4", options="header"]
+|===
+|項目 |変数名 |型 |備考
+
+|年齢
+|`Age`
+|`int`
+|
+
+|シーズン
+|`Season`
+|`int(Enum)`
+|オフシーズンかシーズン中かを保持する
+
+|成長型
+|`GrowthType`
+|`int(Enum)`
+|
+
+|ポジション
+|`Position`
+|`int(Enum)`
+|投手・野手
+
+|行動回数
+|`NumberOfAction`
+|`int`
+|
+
+|能力
+|`Ability`
+|`class`
+|各能力は経験値で管理
+
+|ミート
+|`Ability.Meet`
+|`int`
+|
+
+|パワー
+|`Ability.Power`
+|`int`
+|
+
+|走力
+|`Ability.Soryoku`
+|`int`
+|
+
+|守備
+|`Ability.Syubi`
+|`int`
+|
+
+|小技
+|`Ability.Kowaza`
+|`int`
+|
+
+|精神
+|`Ability.Seishin`
+|`int`
+|投手精神と共通
+
+|ケガ
+|`Ability.Kega`
+|`int`
+|投手ケガと共通
+
+|球速
+|`Ability.Kyusoku`
+|`int`
+|
+
+|球質
+|`Ability.Tamashitsu`
+|`int`
+|
+
+|変化
+|`Ability.Henka`
+|`Dictionary(int,int)`
+|球種(Enum),経験値の組
+
+|コントロール
+|`Ability.Control`
+|`int`
+|
+
+|スタミナ
+|`Ability.Stamina`
+|`int`
+|
+
+|特殊経験値
+|`Ability.BaseBallSpAbilityExp`
+|`int`
+|
+
+|新球経験値
+|`Ability.NewPitchExp`
+|`int`
+|
+
+|野球特殊能力
+|`Ability.BaseBallSpAbilitys`
+|`List<int(Enum)>`
+|
+
+|共通特殊能力
+|`Ability.CommonAbilitys`
+|`List<int(Enum)>`
+|
+
+|アピールポイント
+|`AppealPoint`
+|`int(Enum)`
+|
+
+|恋愛相手
+|`Partner`
+|`class`
+|
+
+|恋愛相手能力
+|`Partner.Ability`
+|`int(Enum), int(Enum)`
+|色・能力の組
+
+|恋愛相手好感度
+|`Partner.Likeability`
+|`double`
+|
+
+|結婚フラグ
+|`Partner.IsMarried`
+|`bool`
+|
+
+|所持アイテム
+|`Items`
+|`List<int(Enum)>`
+|
+
+|アイテム経験値
+|`ItemsExp`
+|`Dictionary(int,int)`
+|アイテム名(Enum),経験値の組
+
+|賃貸
+|`RentingRoom`
+|`int(Enum)`
+|
+
+|行動状態
+|`ActionStat`
+|`class`
+|
+
+|自主トレフラグ
+|`ActionStat.Jisyutore`
+|`class(bool, bool)`
+|
+
+|自主トレ当年参加可否
+|`ActionStat.Jisyutore.CanParticipateThisYear`
+|`bool`
+|
+
+|自主トレ主催済み
+|`ActionStat.Jisyutore.HasHosted`
+|`bool`
+|
+
+|公園状態
+|`ActionStat.Park`
+|`List<int(Enum)>`
+|年度中の15アドレス戻りを再現するためListで履歴を保持
+
+|公園参照先インデックス
+|`ActionStat.ParkIndex`
+|`int`
+|公園への外出を選択した際、参照される公園状態のインデックスを示す。年度中の15アクセス戻りの再現に使用する。
+
+|バット状態
+|`ActionStat.Bat`
+|`int(Enum)`
+|
+
+|焼き鳥状態
+|`ActionStat.HasYakitoriEffect`
+|`bool`
+|焼き鳥の効果がある状態を`True`と定義する。
+
+|ケガ残り回数
+|`ActionStat.InjuryTurn`
+|`int`
+|0のときのみ練習可
+
+|ダンジョン可否
+|`ActionStat.CanGoToDungeon`
+|`bool`
+|
+
+|フィットネス状態
+|`ActionStat.fitness`
+|`class(bool, int)`
+|
+
+|フィットネス参加可否
+|`ActionStat.can_go_to_fitness`
+|`bool`
+|
+
+|フィットネス実行回数
+|`ActionStat.fitness.execution_count`
+|`int`
+|
+
+|幸福の水効果
+|`ActionStat.is_avaliable_lucky_water`
+|`bool`
+|
+
+|===
+
+=== bbl_envモジュール群
+本モジュールではBBLの進行管理を行う。
+行動回数の消費を行う``action.py``に加え、買い物など行動回数に関係ない環境の変化についてもここで行う。
+事実上、ユーザが触る画面の再現を行うモジュール群である。
+
+==== bbl_env.py
+本モジュールは、BBLにおけるプレイヤーの行動管理を行う中心的なスクリプトである。
+プレイヤーが選択可能なアクションを各サブモジュールに分散定義し、環境全体の進行を制御する。
+言うなれば人間を再現するモジュールである。
+
+本モジュールは変数のメンバを持たず、サブモジュールを呼び出すメソッドのみを定義する。
+<<tbl-bbl-env-py>>は``bbl_env.py``のメソッド一覧である。
+
+
+[[tbl-bbl-env-py]]
+.bbl_env.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|コンストラクタ
+|`+__init__+`
+|public
+|``self``
+|-
+|bbl_playerインスタンスの生成、およびサブモジュールの関数のマッピングと実行可否の判定を行う。
+
+|有効行動ID取得
+|`+get_valid_actions+`
+|public
+|``self``
+|List<int>
+|各サブモジュールの有効判定メソッドを呼び出す。現在実行可能なメソッドのインデックスをコンストラクタのマッピングに対応するint型のListとして返却する。
+
+|行動
+|`step`
+|public
+|``self, int``
+|`+_get_observation+`,`+__calculate_reward+`
+|行動回数を1消費して指定された引数の行動を行い、bbl_playerインスタンスの値を更新する。
+
+|現在状態取得
+|`+_get_observation+`
+|private
+|`self`
+|self.player
+|AIへ受け渡す情報を返却する。
+
+|評価点計算
+|`+_calculate_reward+`
+|private
+|`self`
+|double
+|AIへ受け渡す評価点を計算する。
+
+|転生
+|`player_reset`
+|public
+|``self``
+|`+_get_observation+`
+|能力・年齢の初期化、成長型の再抽選、``bbl_rules.calc_init.py``を呼び出しての初期値計算を行う。
+
+|===
+
+==== action.py
+本モジュールでは、行動回数を消費する全ての行動に対する管理を行う。
+内部処理は行わず、``bbl_action``モジュール群のメソッドを呼び出す処理のみを行う。
+
+<<tbl-action-py>>は``action.py``のメソッド一覧である。
+
+[[tbl-action-py]]
+.action.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|コンストラクタ
+|`+__init__+`
+|public
+|``self``
+|-
+|``bbl_action``モジュール群の各行動実行関数のマッピング、およびそれぞれの実行可否の判定を行う。
+
+|実行可否判定メソッド
+|``is_available_action``
+|private
+|``bbl_player``
+|bool
+|行動回数消費可否を返却する。引数の``bbl_player``の``NumberOfAction``が1以上のとき``True``、0未満のとき``False``となる。Falseのとき、本モジュールの処理は実行できない。
+
+|有効行動ID取得
+|`+get_valid_actions+`
+|public
+|``self``
+|List<int>
+|各サブモジュールの有効判定メソッドを呼び出す。現在実行可能なメソッドのインデックスをコンストラクタのマッピングに対応するint型のListとして返却する。
+
+|練習
+|``do_practice``
+|public
+|``bbl_player``
+|``bbl_player``
+|``bbl_action.practice.py``を呼び出す。練習項目の選択・上昇量計算・怪我判定は呼び出し先で行う。ケガ残り回数が0でないと実行不可。
+
+|自主トレ
+|``do_jisyutore``
+|public
+|``bbl_player``
+|``bbl_player``
+|``bbl_action.jisyutore.py``を呼び出す。上昇能力の判定と計算は呼び出し先で行う。オフシーズン且つ年度中未実施でないと実行不可。
+
+|勉強
+|``do_study``
+|public
+|``bbl_player``
+|``bbl_player``
+|``bbl_action.study.py``を呼び出す。経験値の計算は呼び出し先で行う。勉強対象の本が所持アイテムにないときは実行不可。
+
+|遊び
+|``do_play``
+|public
+|``bbl_player``
+|``bbl_player``
+|``bbl_action.play.py``を呼び出す。経験値の計算は呼び出し先で行う。対応するアイテムが所持アイテムにないか、取得経験値の上限を超過しているときは実行不可。
+
+|公園
+|``go_to_park``
+|public
+|``bbl_player``
+|``bbl_player``
+|``bbl_action.park.py``を呼び出す。経験点が上がる処理が起こらない場合は実行不可とする（実際のBBLでは実行可能だが、無意味な処理なので割愛する）。
+
+|カーディーラー
+|``go_to_cardealer``
+|public
+|``bbl_player``
+|``bbl_player``
+|``bbl_action.cardealer.py``を呼び出す。(TBD: 現状の情報からYUR実装が困難なため)
+
+|恋愛
+|``renai``
+|public
+|``bbl_player``
+|``bbl_player``
+|``bbl_action.renai.py``を呼び出す。既に結婚済みの場合は実行不可とする。
+
+|ダンジョン
+|``go_to_dungeon``
+|public
+|``bbl_player``
+|``bbl_player``
+|``bbl_action.dungeon.py``を呼び出す。ダンジョンに生涯で1度でも入っている場合は実行不可とする。
+
+|焼き鳥屋
+|``eat_yakitori``
+|public
+|``bbl_player``
+|``bbl_player``
+|``bbl_action.yakitori.py``を呼び出す。焼き鳥の効果が残っている場合は実行不可とする。
+
+|材木店
+|``go_to_lumberyard``
+|public
+|``bbl_player``
+|``bbl_player``
+|``bbl_action.lumberyard.py``を呼び出す。年度中に2回訪れた後は実行不可とする。
+
+|水専門企業
+|``go_to_watercompany``
+|public
+|``bbl_player``
+|``bbl_player``
+|``bbl_action.watercompany.py``を呼び出す。幸運の水の効果が残っている場合は実行不可とする。
+
+|喫茶店
+|``go_to_coffeeshop``
+|public
+|``bbl_player``
+|``bbl_player``
+|``bbl_action.coffeeshop.py``を呼び出す。小APを保持していない場合は実行不可とする。
+
+|===
+
+==== get_ability.py
+本モジュールでは、新球および野球特殊能力の獲得を行う。
+<<tbl-get-ability-py>>は``get_ability.py``のメソッド一覧である。
+
+[[tbl-get-ability-py]]
+.get_ability.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|コンストラクタ
+|`+__init__+`
+|public
+|``self``
+|-
+|本モジュール群の各行動実行関数のマッピング、およびそれぞれの実行可否の判定を行う。
+
+|実行可否判定メソッド（全体）
+|``is_available_get_ability``
+|private
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。新球獲得または特殊能力獲得のいずれかが実行可能な場合に ``True``、それ以外は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。
+
+|実行可否判定メソッド（新球）
+|`+_is_available_new_pitch+`
+|private
+|``bbl_player``
+|bool
+|プレイヤーの新球経験値が、未獲得球種の必要経験値を1つでも上回っている場合に ``True``、それ以外は ``False`` を返す。
+
+|実行可否判定メソッド（特殊能力）
+|`+_is_available_get_special_ability+`
+|private
+|``bbl_player``
+|bool
+|プレイヤーの特殊経験値が、未獲得の特殊能力の最低必要経験値以上の場合に ``True``、それ以外は ``False`` を返す。
+
+|新球獲得実行
+|`execute_get_new_pitch`
+|public
+|`bbl_player`
+|`bbl_player`
+|親モジュールから呼び出される。獲得可能な球種一覧の照会とその修得を一貫して行う。
+
+|新球選択肢取得
+|`get_selectable_pitches`
+|public
+|``bbl_player``
+|``List<(int(Enum), int)>``
+|新球経験値をもとに、``bbl_rules.common.py``から球種と必要経験値の一覧表を取得する。
+
+|新球獲得処理
+|`get_new_pitch`
+|public
+|`bbl_player`, int(Enum)
+|`bbl_player`
+|指定されたEnumの球種を修得し、対応する経験値を減算したプレイヤーオブジェクトを返却する。
+
+
+|特殊能力獲得実行
+|`execute_get_new_pitch`
+|public
+|`bbl_player`
+|`bbl_player`
+|親モジュールから呼び出される。獲得可能な特殊能力一覧の照会とその修得を一貫して行う。
+
+|特殊能力選択肢取得
+|`get_selectable_special_ability`
+|public
+|``bbl_player``
+|``List<(int(Enum), int)>``
+|特殊経験値をもとに、``bbl_rules.common.py``から特殊能力と必要経験値の一覧表を取得する。
+
+|特殊能力獲得処理
+|`get_special_ability`
+|public
+|`bbl_player`, int(Enum)
+|`bbl_player`
+|指定されたEnumの球種を修得し、対応する経験値を減算したプレイヤーオブジェクトを返却する。
+
+|===
+
+==== move_nextday.py
+本モジュールでは、現実時間で1日（BBL内での半年）を進める処理を行う。
+<<tbl-move-nextday-py>>は``move_nextday.py``のメソッド一覧である。
+
+[[tbl-move-nextday-py]]
+.move-nextday.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|実行可否判定メソッド
+|``is_available_move_nextday``
+|public
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。残り行動回数が15以下のとき ``True``、それ以外は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。
+
+|日程進行
+|``move_nextday``
+|public
+|``bbl_player``
+|``bbl_player``
+|日程進行処理を行う。現在がオフシーズンの場合、行動回数を15増やしてシーズン中に移行する。また、公園参照先インデックスを15戻す。 +
+現在がシーズン中の場合、行動回数を15、年齢を1増やしてシーズン中に移行する。自主トレ可否・公園状態および参照インデックス・バット状態・焼き鳥状態・フィットネス参加可否・幸福の水効果のリセットを同時に行う。
+
+|===
+
+==== shopping.py
+本モジュールでは買い物の処理を行う。
+<<tbl-shopping-py>>は``shopping.py``のメソッド一覧である。
+
+[[tbl-shopping-py]]
+.shopping.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|実行可否判定メソッド
+|``is_available_shopping``
+|public
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。`get_selectable_items`が0件のとき ``True``、それ以外は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。
+
+|買い物実行
+|`execute_shopping`
+|public
+|``bbl_player``
+|``bbl_player``
+|親モジュールから呼び出される。購入可能なアイテム一覧の照会と購入を一貫して行う。
+
+|買い物選択肢取得
+|`get_selectable_items`
+|public
+|``bbl_player``
+|``List<int(Enum)>``
+|``bbl_rules.common.py``から現在の住居における空きスペース、および所持済みアイテムの占有スペースを取得する。それらから残りスペースを計算し、購入可能なアイテムの一覧をListで返却する。
+
+|アイテム購入処理
+|`get_item`
+|public
+|`bbl_player`, int(Enum)
+|`bbl_player`
+|指定されたEnumの購入を行い、所持アイテムに追加したプレイヤーオブジェクトを返却する。
+
+|===
+
+==== reset.py
+本モジュールは、選手が衰え年齢に達し育成を終えた際の引退・転生用メソッドである。
+<<tbl-reset-py>>は``reset.py``のメソッド一覧である。
+
+[[tbl-reset-py]]
+.reset.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|選手情報リセット
+|``reset``
+|public
+|``bbl_player``
+|``bbl_player``
+|選手状態の一括リセット、および成長型の再抽選と``bbl_rules.calc_init.py``を呼び出しての初期値の再計算を行う。
+
+|===
+
+
+=== bbl_actionモジュール群
+本モジュールは``bbl_env.action.py``から呼び出される各行動の詳細な処理を司り、同時に``player``クラスの更新を行う。
+
+==== practice.py
+本モジュールは練習の処理を行う。
+<<tbl-practice-py>>は``practice.py``のメソッド一覧である。
+
+[[tbl-practice-py]]
+.practice.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|実行可否判定メソッド
+|``is_available_practice``
+|public
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。ケガ残り回数が0のとき ``True``、それ以外は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。
+
+|練習実行
+|`execute_practice`
+|public
+|``bbl_player``
+|``bbl_player``
+|親モジュールから呼び出される。実施可能な練習一覧の照会と実行を一貫して行う。
+
+|練習選択肢取得
+|`get_practice_menu`
+|public
+|``bbl_player``
+|``List<int(Enum), int(Enum)>``
+|育成中選手のポジションおよび能力値を基に、実行可能な練習項目を一覧で返却する。返却型は練習項目・練習規模（大練習・小練習）の組とする。 +
+最大に達した能力・ポジションに無関係な能力の練習は行えないものとする。
+
+|練習計算処理
+|`do_practice`
+|public
+|`bbl_player`, (int(Enum), int(Enum))
+|`bbl_player`
+|指定されたEnumの練習を行い、``bbl_rules.exp_calc.py``を実行した戻り値の分だけ各能力の経験点を増減させる。
+
+|===
+
+==== jisyutore.py
+本モジュールは自主トレの処理を行う。
+<<tbl-jisyutore-py>>は``jisyutore.py``のメソッド一覧である。
+
+[[tbl-jisyutore-py]]
+.jisyutore.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|実行可否判定メソッド
+|``is_available_jisyutore``
+|public
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。オフシーズン且つ本年中の自主トレが未実施とき ``True``、それ以外は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。
+
+|自主トレ実行
+|`execute_jisyutore`
+|public
+|``bbl_player``
+|``bbl_player``
+|親モジュールから呼び出される。実施可能な練習一覧の照会と実行を一貫して行う。
+
+|自主トレ選択肢取得
+|`get_jisyutore_menu`
+|public
+|``bbl_player``
+|``List<int(Enum)>``
+|育成中選手のステータスを基に、実行可能な自主トレ項目（主催・参加）を一覧で返却する。
+
+|自主トレ実施処理
+|`do_jisyutore`
+|public
+|`bbl_player`, int(Enum)
+|`bbl_player`
+|指定されたEnumの自主トレを行い、``bbl_rules.exp_calc.py``を実行した戻り値の分だけ各能力の経験点を増やす。
+
+|===
+
+==== study.py
+本モジュールは勉強の処理を行う。
+<<tbl-study-py>>は``study.py``のメソッド一覧である。
+
+[[tbl-study-py]]
+.study.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|実行可否判定メソッド
+|``is_available_study``
+|public
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。所持アイテムに勉強本があり且つ対応する特殊能力が未修得のとき ``True``、それ以外は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。
+
+|勉強実行
+|`execute_study`
+|public
+|``bbl_player``
+|``bbl_player``
+|親モジュールから呼び出される。実施可能な勉強一覧の照会と実行を一貫して行う。
+
+|勉強選択肢取得
+|`get_study_menu`
+|public
+|``bbl_player``
+|``List<int(Enum)>``
+|育成中選手のステータスを基に、勉強可能な項目を一覧で返却する。
+
+|勉強実施処理
+|`do_study`
+|public
+|`bbl_player`, int(Enum)
+|`bbl_player`
+|指定されたEnumの勉強を行い、``bbl_rules.exp_calc.py``を実行した戻り値の分だけ対応するアイテム経験値を増やす。
+
+|===
+
+
+==== play.py
+本モジュールは遊びの処理を行う。
+<<tbl-play-py>>は``play.py``のメソッド一覧である。
+
+[[tbl-play-py]]
+.play.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|実行可否判定メソッド
+|``is_available_play``
+|public
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。所持アイテムに遊び道具があり且つ取得経験値が上限に未達のとき ``True``、それ以外は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。
+
+|遊び実行
+|`execute_play`
+|public
+|``bbl_player``
+|``bbl_player``
+|親モジュールから呼び出される。実施可能な遊び一覧の照会と実行を一貫して行う。
+
+|遊び選択肢取得
+|`get_play_menu`
+|public
+|``bbl_player``
+|``List<int(Enum)>``
+|育成中選手のステータスを基に、遊べるアイテムの一覧を一覧で返却する。
+
+|遊び実施処理
+|`do_play`
+|public
+|`bbl_player`, int(Enum)
+|`bbl_player`
+|指定されたEnumの遊びを行い、``bbl_rules.exp_calc.py``を実行した戻り値の分だけ対応する項目の経験値を増やす。
+
+|===
+
+
+==== cardealer.py
+（YURの仕様が判明するまで実装延期とする）
+
+
+==== park.py
+本モジュールは勉強の処理を行う。
+<<tbl-park-py>>は``park.py``のメソッド一覧である。
+
+[[tbl-park-py]]
+.park.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|実行可否判定メソッド
+|``is_available_park``
+|public
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。公園にケガ以外のOBが居て、且つ所持能力に空きがある、または「記憶のスキマ」を保有しているとき ``True``、それ以外は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。 +
+なお、年度末ラスト1回の経験点獲得イベントは仕様未解明の部分が多いため、実装延期とする。
+
+|公園外出
+|`go_to_park`
+|public
+|``bbl_player``
+|``bbl_player``
+a|親モジュールから呼び出される。出現しているOB、定数として定義された確率をもとに小APおよび経験値の獲得処理を行う。 +
+処理の分岐については以下の通り。（以下で確定ではないが、暫定処理とする）
+
+* 小APを付け替える場合（所持能力に「記憶のスキマ」がある場合）
+** 0～1000の乱数を発生させ、値がスキマ時成功率を下回っているかを判定する。
+*** 上記が`False`の場合
+**** 処理を終了する。
+*** 上記が`True`で、鳥よけを所持していない場合
+**** さらに0～1000の乱数を発生させ、値がオウム出現率を上回っているかを判定する。
+***** 上記が`False`の場合
+****** 処理を終了する。
+***** 上記が`True`の場合
+****** 所持能力の「記憶のスキマ」を該当する能力の小APに置き換える。さらに、該当経験値をAP小×1だけ増やす。
+*** 上記が`True`で、鳥よけを所持している場合
+**** 所持能力の「記憶のスキマ」を該当する能力の小APに置き換える。経験値は増やさない。
+* 小APを新規取得する場合
+** 鳥よけを所持していない場合
+*** 0～1000の乱数を発生させ、値がオウム出現率を上回っているかを判定する。
+**** 上記が`False`の場合
+***** 処理を終了する。
+**** 上記が`True`の場合
+***** 該当する能力の小APを獲得する。さらに、該当経験値を非AP小×4だけ増やす。
+** 鳥よけを所持している場合
+*** 該当する能力の小APを獲得する。経験値は増やさない。
+
+|===
+
+==== renai.py
+本モジュールは遊びの処理を行う。
+<<tbl-renai-py>>は``renai.py``のメソッド一覧である。
+
+[[tbl-renai-py]]
+.renai.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|実行可否判定メソッド
+|``is_available_renai``
+|public
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。選手が未婚のとき ``True``、それ以外は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。
+
+|恋愛実行
+|`execute_renai`
+|public
+|``bbl_player``
+|``bbl_player``
+|親モジュールから呼び出される。実施可能な恋愛選択肢一覧の照会と実行を一貫して行う。
+
+|恋愛選択肢取得
+|`get_renai_menu`
+|public
+|``bbl_player``
+|``List<int(Enum)>``
+|育成中選手のステータスを基に、選択可能な恋愛選択肢の一覧を一覧で返却する。 +
+恋愛相手がいない場合は「デート」・「プロポーズ」、いる場合は「出会い」は行えない。 +
+また、前2つは対象アイテムを保持していない場合も選択不可とする。 +
+例外として、フィットネスへの外出は結婚前且つ選択回数3回未満の場合は常に選択できる。
+
+|恋愛実施処理
+|`do_renai`
+|public
+|`bbl_player`, `int(Enum)`
+|`bbl_player`
+|指定されたEnumに応じて、以下のメソッド群を呼び出す。
+
+|出会う
+|`execute_deai`
+|public
+|``bbl_player``
+|``bbl_player``
+|親モジュールから呼び出される。実施可能な恋愛選択肢一覧の照会と実行を一貫して行う。
+
+|恋愛相手候補取得
+|`_get_partner_list`
+|private
+|
+|``List<int(Enum), int(Enum)>``
+|恋人の候補を色・能力値の組として返却する。 +
+本シミュレータでは、メンタリスト・やる気スイッチの恋人のみを候補とする。
+
+|出会い処理
+|`do_deai`
+|public
+|`bbl_player`, `int(Enum)`, `int(Enum)`
+|`bbl_player`
+|指定されたEnumの能力を持つ恋人を引数``player``の恋愛相手として設定する。
+
+|デート
+|`go_date`
+|public
+|`bbl_player`
+|`bbl_player`
+|定義された定数によってデートの好感度上昇値を計算し、反映させる。 +
+本シミュレータでは、好感度上昇アイテム一式を未所持の場合は選択不可とする。
+
+|プロポーズ
+|`do_propose`
+|public
+|`bbl_player`
+|`bbl_player`
+a|恋愛相手との結婚フラグを立てる。 +
+本シミュレータでは、以下の条件をすべて満たす場合のみ実行可能とする。 +
+
+* 恋愛相手の好感度が100を超えていること
+* 幸福の水の効果があること
+* 所持アイテムに結婚指輪があること
+
+|フィットネスへの外出
+|`go_to_fitness`
+|public
+|`bbl_player`
+|`bbl_player`
+|フィットネスの参加回数を1増やし、参加可否フラグを`false`にする。
+
+|===
+
+==== dungeon.py
+本モジュールはダンジョンの処理を行う。
+<<tbl-dungeon-py>>は``dungeon.py``のメソッド一覧である。
+
+[[tbl-dungeon-py]]
+.dungeon.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|実行可否判定メソッド
+|``is_available_dungeon``
+|public
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。生涯ダンジョンに一度も行っておらず、且つアイテムスペースに空きがあるとき ``True``、それ以外は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。 +
+また、実際には年俸1億円以上が必須となるため、再現性を鑑み10年目(28歳)以降のみ実行可能とする。
+
+|ダンジョン探索
+|`execute_dungeon`
+|public
+|``bbl_player``
+|``bbl_player``
+|親モジュールから呼び出される。取得可能なアイテム一覧の紹介と獲得を一貫して行う。
+
+|ダンジョン選択肢取得
+|`get_dungeon_menu`
+|public
+|``bbl_player``
+|``List<int(Enum)>``
+|育成中選手のステータスを基に、入手可能なアイテムを一覧で返却する。
+
+|ダンジョン探索処理
+|`go_to_dungeon`
+|public
+|`bbl_player`, int(Enum)
+|`bbl_player`
+|指定されたEnumのアイテムを入手し、ダンジョン可否フラグを`false`に設定する。
+
+|===
+
+==== yakitori.py
+本モジュールは焼き鳥屋の処理を行う。
+<<tbl-yakitori-py>>は``yakitori.py``のメソッド一覧である。
+
+[[tbl-yakitori-py]]
+.yakitori.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|実行可否判定メソッド
+|``is_available_yakitori``
+|public
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。焼き鳥の効果が有効でない場合``True``、それ以外は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。
+
+|焼き鳥注文
+|`buy_yakitori`
+|public
+|``bbl_player``
+|``bbl_player``
+|親モジュールから呼び出される。焼き鳥の効果を有効化する。
+
+|===
+
+==== laboratory.py
+本モジュールは日野研究所への外出処理を行う。
+<<tbl-laboratory-py>>は``laboratory.py``のメソッド一覧である。
+
+[[tbl-laboratory-py]]
+.laboratory.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|実行可否判定メソッド
+|``is_available_laboratory``
+|public
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。成長型が判明している場合``True``、それ以外は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。
+
+|研究所来訪
+|`go_to_laboratory`
+|public
+|``bbl_player``
+|``bbl_player``
+|親モジュールから呼び出される。非AP大の練習結果をランダムで10個、システム側に保持させる。
+
+|===
+
+
+==== water_company.py
+本モジュールは水専門企業への外出処理を行う。
+<<tbl-water_company-py>>は``water_company.py``のメソッド一覧である。
+なお、不思議な水に関しては買い物のみで購入可能なものとし、外出コマンドを介してのサポートは行わない。
+
+[[tbl-water_company-py]]
+.water_company.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|実行可否判定メソッド
+|``is_available_water_company``
+|public
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。幸福の水の効果が付与されていない場合``True``、付与されている場合は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。
+
+|幸福の水購入
+|`buy_lucky_water`
+|public
+|``bbl_player``
+|``bbl_player``
+|親モジュールから呼び出される。`ActionStat.is_avaliable_lucky_water`をTrueにする。
+
+|===
+
+==== coffeeshop.py
+本モジュールは喫茶ディアボロへの外出処理を行う。
+<<tbl-coffeeshop-py>>は``coffeeshop.py``のメソッド一覧である。
+
+[[tbl-coffeeshop-py]]
+.coffeeshop.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|実行可否判定メソッド
+|``is_available_coffeeshop``
+|public
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。小APを獲得している場合``True``、未獲得または既に「記憶のスキマ」を保有している場合は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。
+
+|記憶を売る
+|`sell_memory`
+|public
+|``bbl_player``
+|``bbl_player``
+|親モジュールから呼び出される。取得済みの小APを「記憶のスキマ」に上書きする。
+
+|===
+
+==== lumberyard.py
+本モジュールは三枝材木店への外出処理を行う。
+<<tbl-lumberyard-py>>は``lumberyard.py``のメソッド一覧である。
+
+[[tbl-lumberyard-py]]
+.lumberyard.pyのメソッド一覧
+[cols="1,1,1,1,1,2", options="header"]
+|===
+|論理名 |メソッド名 |スコープ |引数 |戻り値  |処理内容・備考
+
+|実行可否判定メソッド
+|``is_available_lumberyard``
+|public
+|``bbl_player``
+|bool
+|本メソッドの実行可否を返却する。年度内の来訪回数が2回未満の場合``True``、既に2回来訪している場合は ``False`` を返す。``False``のとき、本モジュールの処理は実行できない。
+
+|バット購入
+|`buy_bat`
+|public
+|``bbl_player``
+|``bbl_player``
+|親モジュールから呼び出される。``ActionStat.Bat``の状態を1つ進める。更に2度目の来訪の場合、20%の確率でミートまたは球質を、20%の確率で精神を1上昇させる。
+
+|===
